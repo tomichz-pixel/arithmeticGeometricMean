@@ -1,1 +1,436 @@
-<p>hello
+<div id="math-game" style="width:100%; max-width:900px; margin:auto; font-family:sans-serif; position: relative;">
+
+<!-- MathJaxの読み込み -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\\(', '\\)']],
+    displayMath: [['\\[', '\\]']]
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+<style>
+#math-game * { box-sizing:border-box; user-select:none; }
+
+#math-game .header {
+    height:48px;
+    background:#333;
+    color:#fff;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:0 12px;
+    font-size:14px;
+}
+
+#math-game .controls {
+    background: #f4f4f4;
+    padding: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    font-size: 14px;
+    border-bottom: 2px solid #ddd;
+}
+
+#math-game .controls label {
+    cursor: pointer;
+    font-weight: bold;
+}
+
+#math-game #reset-btn {
+    width: auto;
+    padding: 6px 12px;
+    margin: 0;
+    font-size: 13px;
+    background: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+#math-game .board {
+    display:flex;
+    flex-direction:column;
+}
+
+#math-game .area {
+    display:grid;
+    grid-template-columns:repeat(3, 1fr);
+    gap:8px;
+    padding:10px;
+}
+
+#math-game #bottom {
+    border-top: 2px dashed #ccc;
+}
+
+#math-game .card {
+    width:100%;
+    cursor:pointer;
+    border-radius:8px;
+    box-shadow:0 1px 4px rgba(0,0,0,0.15);
+}
+
+#math-game .card-inner-wrapper {
+    position:relative;
+    width:100%;
+    padding-bottom:70%; 
+}
+
+#math-game .inner {
+    position:absolute;
+    top:0; left:0;
+    width:100%;
+    height:100%;
+    transform-style:preserve-3d;
+    transition:0.25s;
+    border-radius:8px;
+}
+
+#math-game .flipped .inner {
+    transform:rotateY(180deg);
+}
+
+#math-game .front,
+#math-game .back {
+    position:absolute;
+    top:0; left:0;
+    width:100%;
+    height:100%;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:4px;
+    backface-visibility:hidden;
+    -webkit-backface-visibility:hidden;
+    border-radius:8px;
+    font-weight:normal;
+}
+
+#math-game .math-text {
+    font-size: clamp(14px, 3.5vw, 18px);
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#math-game #top .front { background:#BBDEFB; color:#0D47A1; font-weight:bold; }
+#math-game #bottom .front { background:#FFE0B2; color:#E65100; font-weight:bold; }
+
+#math-game .back {
+    background:white;
+    transform:rotateY(180deg);
+}
+
+#math-game #top .back { color:#1565C0; }
+#math-game #bottom .back { color:#E65100; }
+
+#math-game .matched {
+    opacity:0;
+    transform:scale(0);
+    transition:0.25s;
+    pointer-events: none;
+}
+
+#math-game .modal {
+    display:none;
+    position:absolute;
+    top:0; left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.5);
+    justify-content:center;
+    align-items:flex-start; 
+    padding-top: 105px;
+    z-index: 10;
+}
+
+#math-game .modal-content {
+    background:white;
+    padding:20px;
+    border-radius:10px;
+    width:90%;
+    max-width:420px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    max-height: calc(100vh - 120px);
+    display: flex;
+    flex-direction: column;
+}
+
+#math-game #txt {
+    overflow-y: auto;
+    padding-right: 5px;
+    text-align: center;
+}
+</style>
+
+<div class="header">
+    <div>高度不等式・公式めくり</div>
+    <div>タイム: <span id="t">0</span>秒　ミス: <span id="m">0</span></div>
+</div>
+
+<div class="controls">
+    <label><input type="radio" name="pairCount" value="3"> 3組</label>
+    <label><input type="radio" name="pairCount" value="6" checked> 6組</label>
+    <button id="reset-btn">やり直す</button>
+</div>
+
+<div class="board">
+    <div class="area" id="top"></div>
+    <div class="area" id="bottom"></div>
+</div>
+
+<div class="modal" id="modal">
+    <div class="modal-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 15px;">
+            <h3 id="mt" style="margin: 0; color: #333; font-size: 1.2em;"></h3>
+            <button id="btn" style="width: auto; margin: 0; padding: 6px 16px; background: #FF9800; color: white; border: none; border-radius: 20px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); cursor: pointer;">次へ ＞</button>
+        </div>
+        <div id="txt"></div>
+    </div>
+</div>
+
+<script>
+(function(){
+
+const inequalityPairs = [
+  {
+    id: "amgm_01",
+    type: "相加相乗平均",
+    latexA: "x + y",
+    latexB: "2\\sqrt{xy}",
+    note: "2変数の相加相乗平均の基本形です。x>0, y>0のとき成り立ちます。等号は x = y のとき成立します。"
+  },
+  {
+    id: "amgm_02",
+    type: "相加相乗平均",
+    latexA: "x + y + z",
+    latexB: "3\\sqrt[3]{xyz}",
+    note: "3変数の相加相乗平均の基本形です。入試では右辺の3乗根を消すために全体を3乗した形で用いられることが多いです。等号は x = y = z のときです。"
+  },
+  {
+    id: "amgm_03",
+    type: "相加相乗平均",
+    latexA: "a^2 + b^2",
+    latexB: "2ab",
+    note: "2次式の評価です。(a-b)^2 \\ge 0 から作れるため、a, bが正の数に限定されず実数全体で成立する強力な基本変形です。"
+  },
+  {
+    id: "amgm_04",
+    type: "相加相乗平均",
+    latexA: "\\frac{a}{b} + \\frac{b}{a}",
+    latexB: "2",
+    note: "逆数同士の和の評価です。分数式の最小値を求める際の最初の手駒となります。等号は a = b のときです。"
+  },
+  {
+    id: "amgm_05",
+    type: "相加相乗平均",
+    latexA: "(a+b)(b+c)(c+a)",
+    latexB: "8abc",
+    note: "それぞれのカッコの中で個別に相加相乗平均を適用し、それらの辺々を掛け合わせる医学部頻出のテクニックです。等号は a=b=c のときです。"
+  },
+  {
+    id: "amgm_06",
+    type: "相加相乗平均",
+    latexA: "x + y + \\frac{1}{xy}",
+    latexB: "3",
+    note: "3変数の相加相乗平均への応用です。3変数の積が1となるように仕組まれています。等号成立は x = y = 1 のときです。"
+  },
+  {
+    id: "amgm_07",
+    type: "相加相乗平均",
+    latexA: "\\frac{x^2+y^2}{2}",
+    latexB: "\\left(\\frac{x+y}{2}\\right)^2",
+    note: "2乗の平均と平均の2乗の関係を示す不等式です。コーシー・シュワルツの特殊なケースとしても証明できます。"
+  },
+  {
+    id: "amgm_08",
+    type: "相加相乗平均",
+    latexA: "x^4 + y^4 + 2",
+    latexB: "4xy",
+    note: "式を x^4 + y^4 + 1 + 1 と見なして4変数の相加相乗平均を適用する、極めて高度な定数調整のテクニックです。"
+  }
+];
+
+let topSel=null, botSel=null, lock=false, modalOpen=false;
+let miss=0, match=0, start=null, timer;
+let currentPairCount = 6;
+
+const topArea=document.querySelector('#math-game #top');
+const bottomArea=document.querySelector('#math-game #bottom');
+const modal=document.querySelector('#math-game #modal');
+const mt=document.querySelector('#math-game #mt');
+const txt=document.querySelector('#math-game #txt');
+const btn=document.querySelector('#math-game #btn');
+const resetBtn=document.querySelector('#math-game #reset-btn');
+
+function shuffle(a){ return a.sort(()=>Math.random()-0.5); }
+
+function renderMath() {
+    if(window.MathJax) {
+        MathJax.typesetPromise().catch((err) => console.log(err.message));
+    }
+}
+
+function card(d, cardType){
+    let c=document.createElement('div');
+    c.className='card';
+
+    let wrapper=document.createElement('div');
+    wrapper.className='card-inner-wrapper';
+
+    let i=document.createElement('div');
+    i.className='inner';
+
+    let f=document.createElement('div');
+    f.className='front';
+    // 表面のテキストを「左辺 / 条件式」「右辺 / 評価式」に変更
+    f.innerHTML = cardType === 'formula' ? '左辺 / 条件式<br><span style="font-size:10px; font-weight:normal;">(Tap)</span>' : '右辺 / 評価式<br><span style="font-size:10px; font-weight:normal;">(Tap)</span>';
+
+    let b=document.createElement('div');
+    b.className='back math-text'; 
+    b.innerHTML = cardType === 'formula' ? `\\( \\displaystyle ${d.latexA} \\)` : `\\( \\displaystyle ${d.latexB} \\)`; 
+
+    i.appendChild(f);
+    i.appendChild(b);
+    wrapper.appendChild(i);
+    c.appendChild(wrapper);
+
+    c.onclick=()=>{
+        if(lock||modalOpen) return;
+        
+        if(c.classList.contains('matched')) return;
+
+        if(!start){
+            start=Date.now();
+            timer=setInterval(()=>{
+                document.getElementById('t').textContent = Math.floor((Date.now()-start)/1000);
+            },250);
+        }
+
+        if (cardType === 'formula' && topSel && topSel.c === c) {
+            c.classList.remove('flipped');
+            topSel = null;
+            return;
+        }
+        if (cardType === 'value' && botSel && botSel.c === c) {
+            c.classList.remove('flipped');
+            botSel = null;
+            return;
+        }
+
+        c.classList.add('flipped');
+
+        if(cardType==='formula'){
+            if(topSel) topSel.c.classList.remove('flipped');
+            topSel={c,d};
+        }else{
+            if(botSel) botSel.c.classList.remove('flipped');
+            botSel={c,d};
+        }
+
+        if(topSel && botSel){
+            lock=true;
+
+            setTimeout(()=>{
+                // 正誤判定を id の完全一致に変更
+                if(topSel.d.id === botSel.d.id){
+                    show(
+                        '正解！',
+                        // 不等式なので = ではなく \ge に変更
+                        `<div style="font-size:1.2em; margin:15px 0;">\\( \\displaystyle ${topSel.d.latexA} \\ge ${topSel.d.latexB} \\)</div>`+
+                        `<div style="font-size:0.95em; text-align:left; background:#f4f4f4; padding:15px; border-radius:6px; line-height:1.6;">`+
+                        `<b>【解説: ${topSel.d.type}】</b><br>${topSel.d.note}</div>`,
+                        ()=>{
+                            topSel.c.classList.add('matched');
+                            botSel.c.classList.add('matched');
+                            match++;
+                            reset();
+                            if(match===currentPairCount) end();
+                        }
+                    );
+                }else{
+                    miss++;
+                    document.getElementById('m').textContent=miss;
+
+                    show(
+                        'ちがうよ',
+                        `<div style="font-size:1.2em; margin:15px 0;">\\( \\displaystyle ${topSel.d.latexA} \\ge ${topSel.d.latexB} \\)</div>`+
+                        `<div style="font-size:0.95em; text-align:left; background:#f4f4f4; padding:15px; border-radius:6px; line-height:1.6;">`+
+                        `<b>【解説: ${topSel.d.type}】</b><br>${topSel.d.note}</div>`,
+                        ()=>{
+                            topSel.c.classList.remove('flipped');
+                            botSel.c.classList.remove('flipped');
+                            reset();
+                        }
+                    );
+                }
+            },600);
+        }
+    };
+
+    return c;
+}
+
+function reset(){ topSel=null; botSel=null; lock=false; }
+
+function show(t,body,cb){
+    modalOpen=true;
+    mt.textContent=t;
+    txt.innerHTML=body;
+    modal.style.display='flex';
+    
+    renderMath();
+
+    btn.onclick=()=>{
+        modal.style.display='none';
+        modalOpen=false;
+        cb();
+    };
+}
+
+function end(){
+    clearInterval(timer);
+    show('クリア！',`<div style="margin:10px 0; font-size:18px;">タイム: <b>${document.getElementById('t').textContent}</b>秒<br>ミス: <b>${miss}</b>回</div>よくできました！`, init);
+}
+
+function init(){
+    topSel=null; botSel=null;
+    match=0; miss=0;
+    document.getElementById('m').textContent=0;
+    document.getElementById('t').textContent=0;
+    if(timer) clearInterval(timer);
+    start=null;
+
+    const radios = document.getElementsByName('pairCount');
+    for (let r of radios) {
+        if (r.checked) currentPairCount = parseInt(r.value);
+    }
+
+    let gameData = shuffle([...inequalityPairs]).slice(0, currentPairCount);
+
+    topArea.innerHTML='';
+    bottomArea.innerHTML='';
+
+    shuffle([...gameData]).forEach(d=>topArea.appendChild(card(d,'formula')));
+    shuffle([...gameData]).forEach(d=>bottomArea.appendChild(card(d,'value')));
+
+    renderMath();
+}
+
+resetBtn.onclick = init;
+
+init();
+
+})();
+</script>
+
+</div>
